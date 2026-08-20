@@ -915,13 +915,19 @@ class ResultPage extends StatelessWidget {
   ) {
     switch (level) {
       case 'slow':
-        return '느린 편';
+        return '느림';
 
-      case 'fast':
-        return '빠른 편';
+      case 'slightly_slow':
+        return '약간 느림';
 
       case 'normal':
-        return '적정 범위';
+        return '적절';
+
+      case 'slightly_fast':
+        return '약간 빠름';
+
+      case 'fast':
+        return '빠름';
 
       default:
         return '판정 없음';
