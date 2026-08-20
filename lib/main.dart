@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +13,10 @@ void main() {
   );
 }
 
+
+// ============================================================
+// APP
+// ============================================================
 
 class PresentationCoachApp extends StatelessWidget {
   const PresentationCoachApp({
@@ -24,14 +30,32 @@ class PresentationCoachApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'AI Presentation Coach',
+
+      scrollBehavior:
+          const MaterialScrollBehavior().copyWith(
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+        },
+      ),
+
       theme: ThemeData(
         useMaterial3: true,
+        scaffoldBackgroundColor:
+            const Color(0xFFF5F6F8),
       ),
+
       home: const HomePage(),
     );
   }
 }
 
+
+// ============================================================
+// HOME PAGE
+// ============================================================
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -154,6 +178,10 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         errorMessage =
             e
@@ -178,10 +206,6 @@ class _HomePageState extends State<HomePage> {
     BuildContext context,
   ) {
     return Scaffold(
-      backgroundColor:
-          const Color(
-        0xFFF5F6F8,
-      ),
       body: Center(
         child: Container(
           width: double.infinity,
@@ -305,7 +329,6 @@ class _HomePageState extends State<HomePage> {
                             TextStyle(
                           color:
                               Colors.red.shade700,
-                          fontSize: 14,
                         ),
                       ),
                     ),
@@ -369,16 +392,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
 
-                  if (
-                      isLoading
-                  ) ...[
+                  if (isLoading) ...[
                     const SizedBox(
                       height: 20,
                     ),
 
                     const Center(
-                      child:
-                          Column(
+                      child: Column(
                         children: [
                           CircularProgressIndicator(),
 
@@ -390,7 +410,6 @@ class _HomePageState extends State<HomePage> {
                             '발표를 분석하고 있습니다...',
                             style:
                                 TextStyle(
-                              fontSize: 14,
                               color:
                                   Colors.black54,
                             ),
@@ -410,20 +429,36 @@ class _HomePageState extends State<HomePage> {
 }
 
 
-class ResultPage extends StatelessWidget {
-  final Map<String, dynamic> result;
+// ============================================================
+// RESULT PAGE
+// ============================================================
 
+class ResultPage extends StatefulWidget {
+  final Map<String, dynamic> result;
 
   const ResultPage({
     super.key,
     required this.result,
   });
 
+  @override
+  State<ResultPage> createState() {
+    return _ResultPageState();
+  }
+}
+
+
+class _ResultPageState extends State<ResultPage> {
+  int selectedWindowIndex = 0;
+
 
   @override
   Widget build(
     BuildContext context,
   ) {
+    final result =
+        widget.result;
+
     final speech =
         Map<String, dynamic>.from(
       result['speech'] ?? {},
@@ -498,12 +533,25 @@ class ResultPage extends StatelessWidget {
             )
             .length;
 
+    Map<String, dynamic>?
+        selectedWindow;
+
+    if (
+        heatmap.isNotEmpty
+    ) {
+      if (
+          selectedWindowIndex >=
+          heatmap.length
+      ) {
+        selectedWindowIndex = 0;
+      }
+
+      selectedWindow =
+          heatmap[
+              selectedWindowIndex];
+    }
 
     return Scaffold(
-      backgroundColor:
-          const Color(
-        0xFFF5F6F8,
-      ),
       body: Center(
         child: Container(
           width:
@@ -512,47 +560,14 @@ class ResultPage extends StatelessWidget {
               const BoxConstraints(
             maxWidth: 430,
           ),
-          color: Colors.white,
-          child: SafeArea(
+          color:
+              Colors.white,
+          child:
+              SafeArea(
             child: Column(
               children: [
-                Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    16,
-                    12,
-                    16,
-                    8,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          Navigator.of(
-                            context,
-                          ).pop();
-                        },
-                        icon:
-                            const Icon(
-                          Icons.arrow_back,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        width: 4,
-                      ),
-
-                      const Text(
-                        '발표 분석 결과',
-                        style:
-                            TextStyle(
-                          fontSize: 22,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                _buildHeader(
+                  context,
                 ),
 
                 Expanded(
@@ -563,12 +578,17 @@ class ResultPage extends StatelessWidget {
                       20,
                       8,
                       20,
-                      32,
+                      36,
                     ),
-                    child: Column(
+                    child:
+                        Column(
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
                       children: [
+                        // ==================================================
+                        // AI 종합 평가
+                        // ==================================================
+
                         _SectionCard(
                           title:
                               'AI 종합 평가',
@@ -589,16 +609,22 @@ class ResultPage extends StatelessWidget {
                           height: 16,
                         ),
 
+                        // ==================================================
+                        // 주요 지표
+                        // ==================================================
+
                         Row(
                           children: [
                             Expanded(
-                              child: _MetricCard(
-                                title: '발표 속도',
-                                value: _paceText(
+                              child:
+                                  _MetricCard(
+                                title:
+                                    '발표 속도',
+                                value:
+                                    _paceText(
                                   speech['pace_level']
                                       ?.toString(),
                                 ),
-                                unit: '',
                                 subtitle:
                                     '${speech['presentation_rate'] ?? 0} 어절/분',
                               ),
@@ -609,13 +635,15 @@ class ResultPage extends StatelessWidget {
                             ),
 
                             Expanded(
-                              child: _MetricCard(
-                                title: '멈춤 비율',
-                                value: _pausePercent(
+                              child:
+                                  _MetricCard(
+                                title:
+                                    '멈춤 비율',
+                                value:
+                                    '${_pausePercent(
                                   speech[
                                       'internal_pause_ratio'],
-                                ),
-                                unit: '%',
+                                )}%',
                                 subtitle:
                                     '총 ${speech['internal_pause_time'] ?? 0}초',
                               ),
@@ -630,11 +658,12 @@ class ResultPage extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: _MetricCard(
-                                title: '추임새',
-                                value: '$fillerCount',
-                                unit: '회',
-                                subtitle: '',
+                              child:
+                                  _MetricCard(
+                                title:
+                                    '추임새',
+                                value:
+                                    '$fillerCount회',
                               ),
                             ),
 
@@ -643,49 +672,101 @@ class ResultPage extends StatelessWidget {
                             ),
 
                             Expanded(
-                              child: _MetricCard(
-                                title: '반복',
-                                value: '$repetitionCount',
-                                unit: '회',
-                                subtitle: '',
+                              child:
+                                  _MetricCard(
+                                title:
+                                    '반복',
+                                value:
+                                    '$repetitionCount회',
                               ),
                             ),
                           ],
                         ),
 
                         const SizedBox(
-                          height: 16,
+                          height: 20,
                         ),
+
+                        // ==================================================
+                        // 발표 흐름 타임라인
+                        // ==================================================
 
                         _SectionCard(
                           title:
-                              '구간별 분석',
+                              '발표 흐름',
                           child:
                               Column(
-                            children:
-                                heatmap.map(
-                              (
-                                window,
-                              ) {
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.only(
-                                    bottom: 12,
-                                  ),
-                                  child:
-                                      _RiskWindowItem(
-                                    window:
-                                        window,
-                                  ),
-                                );
-                              },
-                            ).toList(),
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '색이 진할수록 개선이 필요한 신호가 많이 탐지된 구간입니다.',
+                                style:
+                                    TextStyle(
+                                  fontSize:
+                                      12,
+                                  color:
+                                      Colors.black54,
+                                  height:
+                                      1.4,
+                                ),
+                              ),
+
+                              const SizedBox(
+                                height: 16,
+                              ),
+
+                              if (
+                                  heatmap.isEmpty
+                              )
+                                const Text(
+                                  '구간 분석 결과가 없습니다.',
+                                )
+                              else
+                                _RiskTimeline(
+                                  heatmap:
+                                      heatmap,
+                                  selectedIndex:
+                                      selectedWindowIndex,
+                                  onSelected:
+                                      (
+                                    index,
+                                  ) {
+                                    setState(() {
+                                      selectedWindowIndex =
+                                          index;
+                                    });
+                                  },
+                                ),
+                            ],
                           ),
                         ),
+
+                        if (
+                            selectedWindow !=
+                            null
+                        ) ...[
+                          const SizedBox(
+                            height: 16,
+                          ),
+
+                          // ==================================================
+                          // 선택 구간 상세
+                          // ==================================================
+
+                          _WindowDetailCard(
+                            window:
+                                selectedWindow,
+                          ),
+                        ],
 
                         const SizedBox(
                           height: 16,
                         ),
+
+                        // ==================================================
+                        // 개선할 점
+                        // ==================================================
 
                         _SectionCard(
                           title:
@@ -710,8 +791,13 @@ class ResultPage extends StatelessWidget {
 
                                 return Padding(
                                   padding:
-                                      const EdgeInsets.only(
-                                    bottom: 18,
+                                      EdgeInsets.only(
+                                    bottom:
+                                        index ==
+                                                improvements.length -
+                                                    1
+                                            ? 0
+                                            : 18,
                                   ),
                                   child:
                                       Column(
@@ -729,15 +815,16 @@ class ResultPage extends StatelessWidget {
                                         ),
                                       ),
 
-                                      const SizedBox(
-                                        height: 4,
-                                      ),
-
                                       if ((item[
                                                   'time_range'] ??
                                               '')
                                           .toString()
-                                          .isNotEmpty)
+                                          .isNotEmpty) ...[
+                                        const SizedBox(
+                                          height:
+                                              4,
+                                        ),
+
                                         Text(
                                           item[
                                                   'time_range']
@@ -750,9 +837,11 @@ class ResultPage extends StatelessWidget {
                                                 Colors.black45,
                                           ),
                                         ),
+                                      ],
 
                                       const SizedBox(
-                                        height: 6,
+                                        height:
+                                            6,
                                       ),
 
                                       Text(
@@ -780,6 +869,10 @@ class ResultPage extends StatelessWidget {
                           height: 16,
                         ),
 
+                        // ==================================================
+                        // 연습 목표
+                        // ==================================================
+
                         _SectionCard(
                           title:
                               '다음 연습 목표',
@@ -798,7 +891,8 @@ class ResultPage extends StatelessWidget {
                                 return Padding(
                                   padding:
                                       const EdgeInsets.only(
-                                    bottom: 10,
+                                    bottom:
+                                        10,
                                   ),
                                   child:
                                       Text(
@@ -821,6 +915,10 @@ class ResultPage extends StatelessWidget {
                           height: 16,
                         ),
 
+                        // ==================================================
+                        // 잘한 점
+                        // ==================================================
+
                         _SectionCard(
                           title:
                               '잘한 점',
@@ -836,7 +934,8 @@ class ResultPage extends StatelessWidget {
                                 return Padding(
                                   padding:
                                       const EdgeInsets.only(
-                                    bottom: 8,
+                                    bottom:
+                                        8,
                                   ),
                                   child:
                                       Text(
@@ -859,6 +958,10 @@ class ResultPage extends StatelessWidget {
                           height: 16,
                         ),
 
+                        // ==================================================
+                        // 한 줄 코칭
+                        // ==================================================
+
                         _SectionCard(
                           title:
                               '한 줄 코칭',
@@ -870,8 +973,10 @@ class ResultPage extends StatelessWidget {
                                 '',
                             style:
                                 const TextStyle(
-                              fontSize: 16,
-                              height: 1.5,
+                              fontSize:
+                                  16,
+                              height:
+                                  1.5,
                               fontWeight:
                                   FontWeight.w600,
                             ),
@@ -882,9 +987,13 @@ class ResultPage extends StatelessWidget {
                           height: 16,
                         ),
 
+                        // ==================================================
+                        // STT
+                        // ==================================================
+
                         _SectionCard(
                           title:
-                              'STT 결과',
+                              '발표 내용',
                           child:
                               Text(
                             result['transcript']
@@ -892,8 +1001,10 @@ class ResultPage extends StatelessWidget {
                                 '',
                             style:
                                 const TextStyle(
-                              fontSize: 14,
-                              height: 1.5,
+                              fontSize:
+                                  14,
+                              height:
+                                  1.55,
                             ),
                           ),
                         ),
@@ -910,60 +1021,518 @@ class ResultPage extends StatelessWidget {
   }
 
 
-  static String _paceText(
-    String? level,
+  Widget _buildHeader(
+    BuildContext context,
   ) {
-    switch (level) {
-      case 'slow':
-        return '느림';
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(
+        12,
+        12,
+        20,
+        8,
+      ),
+      child:
+          Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).pop();
+            },
+            icon:
+                const Icon(
+              Icons.arrow_back,
+            ),
+          ),
 
-      case 'slightly_slow':
-        return '약간 느림';
+          const SizedBox(
+            width: 4,
+          ),
 
-      case 'normal':
-        return '적절';
-
-      case 'slightly_fast':
-        return '약간 빠름';
-
-      case 'fast':
-        return '빠름';
-
-      default:
-        return '판정 없음';
-    }
-  }
-
-
-  static String _pausePercent(
-    dynamic ratio,
-  ) {
-    final value =
-        ratio is num
-            ? ratio.toDouble()
-            : 0.0;
-
-    return (
-      value * 100
-    ).toStringAsFixed(
-      1,
+          const Text(
+            '발표 분석 결과',
+            style:
+                TextStyle(
+              fontSize:
+                  22,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 
+// ============================================================
+// TIMELINE
+// ============================================================
+
+class _RiskTimeline extends StatelessWidget {
+  final List<Map<String, dynamic>>
+      heatmap;
+
+  final int selectedIndex;
+
+  final ValueChanged<int>
+      onSelected;
+
+
+  const _RiskTimeline({
+    required this.heatmap,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return SingleChildScrollView(
+      scrollDirection:
+          Axis.horizontal,
+      child:
+          Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children:
+            List.generate(
+          heatmap.length,
+          (
+            index,
+          ) {
+            final window =
+                heatmap[index];
+
+            final start =
+                _asDouble(
+              window['start'],
+            );
+
+            final end =
+                _asDouble(
+              window['end'],
+            );
+
+            final duration =
+                (end - start)
+                    .clamp(
+              0.1,
+              double.infinity,
+            );
+
+            // 10초 구간 기준 약 100px.
+            // 마지막 짧은 구간은 상대적으로 짧게 표시.
+            final width =
+                (duration * 10)
+                    .clamp(
+              60.0,
+              120.0,
+            );
+
+            final level =
+                window['level']
+                        ?.toString() ??
+                    'low';
+
+            final selected =
+                index ==
+                    selectedIndex;
+
+            return GestureDetector(
+              onTap: () {
+                onSelected(
+                  index,
+                );
+              },
+              child:
+                  Padding(
+                padding:
+                    const EdgeInsets.only(
+                  right:
+                      4,
+                ),
+                child:
+                    Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    AnimatedContainer(
+                      duration:
+                          const Duration(
+                        milliseconds:
+                            180,
+                      ),
+                      width:
+                          width,
+                      height:
+                          selected
+                              ? 54
+                              : 46,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            _riskColor(
+                          level,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(
+                          10,
+                        ),
+                        border:
+                            selected
+                                ? Border.all(
+                                    color:
+                                        Colors.black87,
+                                    width:
+                                        3,
+                                  )
+                                : null,
+                      ),
+                      child:
+                          Center(
+                        child:
+                            Text(
+                          _riskLabel(
+                            level,
+                          ),
+                          style:
+                              TextStyle(
+                            fontSize:
+                                12,
+                            fontWeight:
+                                FontWeight.bold,
+                            color:
+                                _riskTextColor(
+                              level,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 7,
+                    ),
+
+                    SizedBox(
+                      width: width,
+                      child: Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatTime(
+                              start,
+                            ),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.black54,
+                            ),
+                          ),
+
+                          if (
+                              index ==
+                              heatmap.length - 1
+                          )
+                            Text(
+                              _formatTime(
+                                end,
+                              ),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+// ============================================================
+// WINDOW DETAIL
+// ============================================================
+
+class _WindowDetailCard
+    extends StatelessWidget {
+  final Map<String, dynamic> window;
+
+
+  const _WindowDetailCard({
+    required this.window,
+  });
+
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final start =
+        _asDouble(
+      window['start'],
+    );
+
+    final end =
+        _asDouble(
+      window['end'],
+    );
+
+    final score =
+        window['score'] ?? 0;
+
+    final level =
+        window['level']
+                ?.toString() ??
+            'low';
+
+    final reasons =
+        List<String>.from(
+      window['reasons'] ?? [],
+    );
+
+    return _SectionCard(
+      title:
+          '${_formatTime(start)} ~ ${_formatTime(end)} 상세',
+      child:
+          Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '위험도',
+                  value:
+                      '${_riskLabel(level)} · $score점',
+                ),
+              ),
+
+              const SizedBox(
+                width:
+                    12,
+              ),
+
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '발표 속도',
+                  value:
+                      _paceText(
+                    window[
+                            'pace_level']
+                        ?.toString(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(
+            height: 12,
+          ),
+
+          Row(
+            children: [
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '음성 톤',
+                  value:
+                      _emotionText(
+                    window[
+                            'emotion_signal']
+                        ?.toString(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                width:
+                    12,
+              ),
+
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '멈춤',
+                  value:
+                      '${window['pause_count'] ?? 0}회',
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(
+            height: 12,
+          ),
+
+          Row(
+            children: [
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '추임새',
+                  value:
+                      '${window['filler_count'] ?? 0}회',
+                ),
+              ),
+
+              const SizedBox(
+                width:
+                    12,
+              ),
+
+              Expanded(
+                child:
+                    _DetailItem(
+                  label:
+                      '반복',
+                  value:
+                      '${window['repetition_count'] ?? 0}회',
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(
+            height:
+                18,
+          ),
+
+          const Divider(),
+
+          const SizedBox(
+            height:
+                10,
+          ),
+
+          Align(
+            alignment:
+                Alignment.centerLeft,
+            child:
+                Text(
+              '이 구간에서 확인된 신호',
+              style:
+                  TextStyle(
+                fontSize:
+                    13,
+                fontWeight:
+                    FontWeight.w600,
+                color:
+                    Colors.grey.shade700,
+              ),
+            ),
+          ),
+
+          const SizedBox(
+            height:
+                10,
+          ),
+
+          if (
+              reasons.isEmpty
+          )
+            const Align(
+              alignment:
+                  Alignment.centerLeft,
+              child:
+                  Text(
+                '특별한 개선 신호가 탐지되지 않았습니다.',
+                style:
+                    TextStyle(
+                  fontSize:
+                      13,
+                  color:
+                      Colors.black54,
+                ),
+              ),
+            )
+          else
+            ...reasons.map(
+              (
+                reason,
+              ) {
+                return Padding(
+                  padding:
+                      const EdgeInsets.only(
+                    bottom:
+                        7,
+                  ),
+                  child:
+                      Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '• ',
+                        style:
+                            TextStyle(
+                          fontSize:
+                              13,
+                        ),
+                      ),
+
+                      Expanded(
+                        child:
+                            Text(
+                          _replaceBackendTerms(
+                            reason,
+                          ),
+                          style:
+                              const TextStyle(
+                            fontSize:
+                                13,
+                            height:
+                                1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// ============================================================
+// COMPONENTS
+// ============================================================
+
 class _MetricCard extends StatelessWidget {
   final String title;
   final String value;
-  final String unit;
   final String subtitle;
 
 
   const _MetricCard({
     required this.title,
     required this.value,
-    required this.unit,
-    required this.subtitle,
+    this.subtitle = '',
   });
 
 
@@ -990,7 +1559,8 @@ class _MetricCard extends StatelessWidget {
               Colors.grey.shade200,
         ),
       ),
-      child: Column(
+      child:
+          Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
@@ -998,71 +1568,117 @@ class _MetricCard extends StatelessWidget {
             title,
             style:
                 const TextStyle(
-              fontSize: 13,
+              fontSize:
+                  13,
               color:
                   Colors.black54,
             ),
           ),
 
           const SizedBox(
-            height: 8,
+            height:
+                8,
           ),
 
-          Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child:
-                    Text(
-                  value,
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        25,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              const SizedBox(
-                width: 4,
-              ),
-
-              Padding(
-                padding:
-                    const EdgeInsets.only(
-                  bottom: 3,
-                ),
-                child:
-                    Text(
-                  unit,
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        12,
-                    color:
-                        Colors.black54,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            value,
+            style:
+                const TextStyle(
+              fontSize:
+                  25,
+              fontWeight:
+                  FontWeight.bold,
+            ),
           ),
 
-          if (subtitle.isNotEmpty) ...[
+          if (
+              subtitle.isNotEmpty
+          ) ...[
             const SizedBox(
-              height: 4,
+              height:
+                  4,
             ),
 
             Text(
               subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black45,
+              style:
+                  const TextStyle(
+                fontSize:
+                    12,
+                color:
+                    Colors.black45,
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+
+class _DetailItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+
+  const _DetailItem({
+    required this.label,
+    required this.value,
+  });
+
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Container(
+      width:
+          double.infinity,
+      padding:
+          const EdgeInsets.all(
+        12,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.grey.shade50,
+        borderRadius:
+            BorderRadius.circular(
+          12,
+        ),
+      ),
+      child:
+          Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style:
+                const TextStyle(
+              fontSize:
+                  11,
+              color:
+                  Colors.black45,
+            ),
+          ),
+
+          const SizedBox(
+            height:
+                5,
+          ),
+
+          Text(
+            value,
+            style:
+                const TextStyle(
+              fontSize:
+                  14,
+              fontWeight:
+                  FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1107,7 +1723,8 @@ class _SectionCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            blurRadius: 10,
+            blurRadius:
+                10,
             offset:
                 const Offset(
               0,
@@ -1115,12 +1732,14 @@ class _SectionCard extends StatelessWidget {
             ),
             color:
                 Colors.black.withValues(
-              alpha: 0.04,
+              alpha:
+                  0.04,
             ),
           ),
         ],
       ),
-      child: Column(
+      child:
+          Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
@@ -1128,14 +1747,16 @@ class _SectionCard extends StatelessWidget {
             title,
             style:
                 const TextStyle(
-              fontSize: 17,
+              fontSize:
+                  17,
               fontWeight:
                   FontWeight.bold,
             ),
           ),
 
           const SizedBox(
-            height: 12,
+            height:
+                12,
           ),
 
           child,
@@ -1146,139 +1767,206 @@ class _SectionCard extends StatelessWidget {
 }
 
 
-class _RiskWindowItem extends StatelessWidget {
-  final Map<String, dynamic> window;
+// ============================================================
+// TEXT MAPPING
+// ============================================================
+
+String _paceText(
+  String? level,
+) {
+  switch (level) {
+    case 'slow':
+      return '느림';
+
+    case 'slightly_slow':
+      return '약간 느림';
+
+    case 'normal':
+      return '적절';
+
+    case 'slightly_fast':
+      return '약간 빠름';
+
+    case 'fast':
+      return '빠름';
+
+    default:
+      return '판정 없음';
+  }
+}
 
 
-  const _RiskWindowItem({
-    required this.window,
-  });
-
-
-  @override
-  Widget build(
-    BuildContext context,
+String _emotionText(
+  String? emotion,
+) {
+  switch (
+      emotion?.toLowerCase()
   ) {
-    final start =
-        window['start'] ?? 0;
+    case 'neutral':
+      return '차분한 톤';
 
-    final end =
-        window['end'] ?? 0;
+    case 'happy':
+      return '밝은 톤';
 
-    final level =
-        window['level']
-            ?.toString() ??
-            'low';
+    case 'sad':
+      return '가라앉은 톤';
 
-    final score =
-        window['score'] ?? 0;
+    case 'angry':
+      return '강한 톤';
 
-    final reasons =
-        List<String>.from(
-      window['reasons'] ?? [],
-    );
+    case 'fearful':
+      return '불안정한 톤';
 
-    return Container(
-      width:
-          double.infinity,
-      padding:
-          const EdgeInsets.all(
-        14,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.grey.shade50,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child:
-                    Text(
-                  '${_formatSecond(start)} ~ ${_formatSecond(end)}',
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        15,
-                    fontWeight:
-                        FontWeight.w600,
-                  ),
-                ),
-              ),
+    case 'surprised':
+      return '변화가 큰 톤';
 
-              Text(
-                '${level.toUpperCase()}  $score',
-                style:
-                    const TextStyle(
-                  fontSize:
-                      13,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
+    case 'disgusted':
+      return '거친 톤';
 
-          if (
-              reasons.isNotEmpty
-          ) ...[
-            const SizedBox(
-              height: 8,
-            ),
+    case 'emo_unknown':
+    case 'unknown':
+      return '톤 신호 부족';
 
-            ...reasons.map(
-              (
-                reason,
-              ) {
-                return Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    bottom: 3,
-                  ),
-                  child:
-                      Text(
-                    '• $reason',
-                    style:
-                        const TextStyle(
-                      fontSize:
-                          12,
-                      color:
-                          Colors.black54,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ],
-      ),
-    );
+    default:
+      return '분석 불가';
+  }
+}
+
+
+String _riskLabel(
+  String level,
+) {
+  switch (level) {
+    case 'high':
+      return '주의';
+
+    case 'medium':
+      return '보통';
+
+    case 'low':
+      return '안정';
+
+    default:
+      return '분석 없음';
+  }
+}
+
+
+Color _riskColor(
+  String level,
+) {
+  switch (level) {
+    case 'high':
+      return const Color(
+        0xFFFF7B7B,
+      );
+
+    case 'medium':
+      return const Color(
+        0xFFFFD166,
+      );
+
+    case 'low':
+      return const Color(
+        0xFF72D69A,
+      );
+
+    default:
+      return Colors.grey.shade300;
+  }
+}
+
+
+Color _riskTextColor(
+  String level,
+) {
+  switch (level) {
+    case 'high':
+      return const Color(
+        0xFF5D1010,
+      );
+
+    case 'medium':
+      return const Color(
+        0xFF5A4300,
+      );
+
+    case 'low':
+      return const Color(
+        0xFF12492A,
+      );
+
+    default:
+      return Colors.black54;
+  }
+}
+
+
+String _replaceBackendTerms(
+  String text,
+) {
+  return text
+      .replaceAll(
+        'pause',
+        '멈춤',
+      )
+      .replaceAll(
+        'Pause',
+        '멈춤',
+      );
+}
+
+
+// ============================================================
+// UTILS
+// ============================================================
+
+String _pausePercent(
+  dynamic ratio,
+) {
+  final value =
+      ratio is num
+          ? ratio.toDouble()
+          : 0.0;
+
+  return (
+    value * 100
+  ).toStringAsFixed(
+    1,
+  );
+}
+
+
+double _asDouble(
+  dynamic value,
+) {
+  if (
+      value is num
+  ) {
+    return value.toDouble();
   }
 
+  return 0.0;
+}
 
-  static String _formatSecond(
-    dynamic value,
+
+String _formatTime(
+  double seconds,
+) {
+  final totalSeconds =
+      seconds.round();
+
+  final minutes =
+      totalSeconds ~/ 60;
+
+  final remainingSeconds =
+      totalSeconds % 60;
+
+  if (
+      minutes > 0
   ) {
-    final number =
-        value is num
-            ? value.toDouble()
-            : 0.0;
-
-    if (
-        number ==
-        number.roundToDouble()
-    ) {
-      return '${number.toInt()}초';
-    }
-
-    return '${number.toStringAsFixed(1)}초';
+    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
   }
+
+  return '${totalSeconds}초';
 }
