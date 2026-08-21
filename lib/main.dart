@@ -2,8 +2,12 @@ import 'dart:convert';
 
 import 'dart:ui' show PointerDeviceKind;
 
+import 'dart:async';
+import 'package:record/record.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 
@@ -70,37 +74,177 @@ class HomePage extends StatefulWidget {
 
 
 class _HomePageState extends State<HomePage> {
+  final AudioRecorder _audioRecorder = AudioRecorder();
+
+  bool isRecording = false;
+  int recordingSeconds = 0;
+
+  Timer? _recordingTimer;
+
+  Future<void> startRecording() async {
+  if (isLoading || isRecording) {
+    return;
+  }
+
+  try {
+    setState(() {
+      errorMessage = null;
+    });
+
+    final hasPermission =
+        await _audioRecorder.hasPermission();
+
+    if (!hasPermission) {
+      setState(() {
+        errorMessage = '마이크 권한을 허용해주세요.';
+      });
+      return;
+    }
+
+    await _audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.wav,
+        sampleRate: 16000,
+        numChannels: 1,
+        echoCancel: true,
+        noiseSuppress: true,
+        autoGain: true,
+      ),
+      path: 'presentation.wav',
+    );
+
+    setState(() {
+      isRecording = true;
+      recordingSeconds = 0;
+    });
+
+    _recordingTimer?.cancel();
+
+    _recordingTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          recordingSeconds++;
+        });
+      },
+    );
+  } catch (e) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      errorMessage = '녹음을 시작할 수 없습니다: $e';
+    });
+  }
+}
+
+Future<void> stopRecording() async {
+  if (!isRecording) {
+    return;
+  }
+
+  try {
+    _recordingTimer?.cancel();
+
+    final path = await _audioRecorder.stop();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isRecording = false;
+    });
+
+    if (path == null) {
+      throw Exception(
+        '녹음 파일을 생성하지 못했습니다.',
+      );
+    }
+
+    debugPrint(
+      '녹음 파일 경로: $path',
+    );
+
+    // Flutter Web에서는 녹음 파일이
+    // blob:http://localhost:5173/... 형태로 반환됨
+    final blobResponse = await http.get(
+      Uri.parse(path),
+    );
+
+    if (blobResponse.statusCode != 200) {
+      throw Exception(
+        '녹음 파일을 불러오지 못했습니다.',
+      );
+    }
+
+    final bytes = blobResponse.bodyBytes;
+
+    if (bytes.isEmpty) {
+      throw Exception(
+        '녹음된 오디오가 비어 있습니다.',
+      );
+    }
+
+    debugPrint(
+      '녹음 WAV 크기: ${bytes.length} bytes',
+    );
+
+    // 기존 WAV 업로드와 동일한 분석 과정 사용
+    await analyzeWavBytes(
+      bytes,
+      filename: 'recorded_presentation.wav',
+    );
+  } catch (e) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isRecording = false;
+
+      errorMessage = e
+          .toString()
+          .replaceFirst(
+            'Exception: ',
+            '',
+          );
+    });
+  }
+}
+
+
+String formatRecordingTime(
+  int seconds,
+) {
+  final minutes = seconds ~/ 60;
+  final remainingSeconds = seconds % 60;
+
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${remainingSeconds.toString().padLeft(2, '0')}';
+}
+
   bool isLoading = false;
 
   String? errorMessage;
 
 
-  Future<void> pickAndAnalyzeWav() async {
+  Future<void> analyzeWavBytes(
+    Uint8List bytes, {
+    String filename = 'presentation.wav',
+  }) async {
     setState(() {
+      isLoading = true;
       errorMessage = null;
     });
 
-    final file = await FilePicker.pickFile(
-      type: FileType.custom,
-      allowedExtensions: [
-        'wav',
-      ],
-    );
-
-    if (file == null) {
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-    });
-
     try {
-      final bytes =
-          await file.xFile.readAsBytes();
-
-      final request =
-          http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
         Uri.parse(
           'http://127.0.0.1:8000/analyze',
@@ -111,7 +255,7 @@ class _HomePageState extends State<HomePage> {
         http.MultipartFile.fromBytes(
           'file',
           bytes,
-          filename: file.name,
+          filename: filename,
         ),
       );
 
@@ -144,9 +288,7 @@ class _HomePageState extends State<HomePage> {
           }
         } catch (_) {}
 
-        throw Exception(
-          detail,
-        );
+        throw Exception(detail);
       }
 
       final decoded =
@@ -156,9 +298,7 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      if (
-          decoded is! Map<String, dynamic>
-      ) {
+      if (decoded is! Map<String, dynamic>) {
         throw Exception(
           '서버 응답 형식이 올바르지 않습니다.',
         );
@@ -183,13 +323,12 @@ class _HomePageState extends State<HomePage> {
       }
 
       setState(() {
-        errorMessage =
-            e
-                .toString()
-                .replaceFirst(
-                  'Exception: ',
-                  '',
-                );
+        errorMessage = e
+            .toString()
+            .replaceFirst(
+              'Exception: ',
+              '',
+            );
       });
     } finally {
       if (mounted) {
@@ -200,6 +339,54 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
+  Future<void> pickAndAnalyzeWav() async {
+    setState(() {
+      errorMessage = null;
+    });
+
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: [
+        'wav',
+      ],
+    );
+
+    if (file == null) {
+      return;
+    }
+
+    try {
+      final bytes =
+          await file.xFile.readAsBytes();
+
+      await analyzeWavBytes(
+        bytes,
+        filename: file.name,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        errorMessage = e
+            .toString()
+            .replaceFirst(
+              'Exception: ',
+              '',
+            );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _recordingTimer?.cancel();
+    _audioRecorder.dispose();
+
+    super.dispose();
+  }
 
   @override
   Widget build(
@@ -250,34 +437,54 @@ class _HomePageState extends State<HomePage> {
                   const Spacer(),
 
                   Center(
-                    child: Container(
-                      width: 180,
-                      height: 180,
-                      decoration:
-                          BoxDecoration(
-                        shape:
-                            BoxShape.circle,
-                        color:
-                            Colors.grey.shade100,
-                      ),
-                      child: const Icon(
-                        Icons.mic_rounded,
-                        size: 80,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: isLoading
+                          ? null
+                          : () {
+                              if (isRecording) {
+                                stopRecording();
+                              } else {
+                                startRecording();
+                              }
+                            },
+                        customBorder: const CircleBorder(),
+                        child: Ink(
+                          width: 180,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isRecording
+                                ? Colors.red.shade50
+                                : Colors.grey.shade100,
+                          ),
+                          child: Icon(
+                            isRecording
+                                ? Icons.stop_rounded
+                                : Icons.mic_rounded,
+                            size: 80,
+                            color: isRecording
+                                ? Colors.red.shade700
+                                : Colors.black87,
+                          ),
+                        ),
                       ),
                     ),
                   ),
 
                   const SizedBox(
-                    height: 32,
+                    height: 28,
                   ),
 
-                  const Center(
+                  Center(
                     child: Text(
-                      '발표 준비가 되셨나요?',
-                      style: TextStyle(
+                      isRecording
+                          ? '녹음 중입니다'
+                          : '발표 준비가 되셨나요?',
+                      style: const TextStyle(
                         fontSize: 22,
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -286,18 +493,31 @@ class _HomePageState extends State<HomePage> {
                     height: 10,
                   ),
 
-                  const Center(
+                  Center(
                     child: Text(
-                      '녹음하거나 WAV 파일을 업로드해\n발표 습관을 분석할 수 있습니다.',
-                      textAlign:
-                          TextAlign.center,
+                      isRecording
+                          ? formatRecordingTime(
+                              recordingSeconds,
+                            )
+                          : '마이크 버튼을 눌러 녹음을 시작하거나\n'
+                              'WAV 파일을 업로드해 발표 습관을 분석해보세요.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize:
+                            isRecording ? 18 : 15,
                         height: 1.5,
-                        color:
-                            Colors.black54,
+                        color: isRecording
+                            ? Colors.red.shade700
+                            : Colors.black54,
+                        fontWeight: isRecording
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     ),
+                  ),
+
+                  const SizedBox(
+                    height: 28,
                   ),
 
                   if (
@@ -336,88 +556,59 @@ class _HomePageState extends State<HomePage> {
 
                   const Spacer(),
 
-                  SizedBox(
-                    width:
-                        double.infinity,
-                    height: 56,
-                    child:
-                        FilledButton.icon(
-                      onPressed:
-                          isLoading
-                              ? null
-                              : () {},
-                      icon:
-                          const Icon(
-                        Icons.mic,
-                      ),
-                      label:
-                          const Text(
-                        '발표 녹음 시작',
-                        style:
-                            TextStyle(
-                          fontSize: 16,
-                          fontWeight:
-                              FontWeight.w600,
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 28,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton.icon(
+                            onPressed: isLoading
+                                ? null
+                                : pickAndAnalyzeWav,
+                            icon: const Icon(
+                              Icons.upload_file,
+                            ),
+                            label: const Text(
+                              'WAV 파일 업로드',
+                              style: TextStyle(
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
 
-                  const SizedBox(
-                    height: 12,
-                  ),
-
-                  SizedBox(
-                    width:
-                        double.infinity,
-                    height: 52,
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          isLoading
-                              ? null
-                              : pickAndAnalyzeWav,
-                      icon:
-                          const Icon(
-                        Icons.upload_file,
-                      ),
-                      label:
-                          const Text(
-                        'WAV 파일 업로드',
-                        style:
-                            TextStyle(
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  if (isLoading) ...[
-                    const SizedBox(
-                      height: 20,
-                    ),
-
-                    const Center(
-                      child: Column(
-                        children: [
-                          CircularProgressIndicator(),
-
-                          SizedBox(
-                            height: 12,
+                        if (isLoading) ...[
+                          const SizedBox(
+                            height: 20,
                           ),
 
-                          Text(
-                            '발표를 분석하고 있습니다...',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.black54,
+                          const Center(
+                            child: Column(
+                              children: [
+                                CircularProgressIndicator(),
+
+                                SizedBox(
+                                  height: 12,
+                                ),
+
+                                Text(
+                                  '발표를 분석하고 있습니다...',
+                                  style: TextStyle(
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -451,6 +642,7 @@ class ResultPage extends StatefulWidget {
 class _ResultPageState extends State<ResultPage> {
   int selectedWindowIndex = 0;
 
+  bool showDetails = false;
 
   @override
   Widget build(
@@ -590,15 +782,19 @@ class _ResultPageState extends State<ResultPage> {
                         // ==================================================
 
                         _SectionCard(
-                          title:
-                              'AI 종합 평가',
-                          child:
-                              Text(
+                          title: 'AI 종합 평가',
+
+                          trailing: _OverallStatusBadge(
+                            level: risk['overall_level']
+                                    ?.toString() ??
+                                'low',
+                          ),
+
+                          child: Text(
                             coaching['summary']
                                     ?.toString() ??
                                 '',
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
                               height: 1.55,
                             ),
@@ -687,10 +883,68 @@ class _ResultPageState extends State<ResultPage> {
                           height: 20,
                         ),
 
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                showDetails =
+                                    !showDetails;
+                              });
+                            },
+
+                            style:
+                                OutlinedButton.styleFrom(
+                              shape:
+                                  RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  14,
+                                ),
+                              ),
+                            ),
+
+                            child: Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  showDetails
+                                      ? '상세 닫기'
+                                      : '상세 보기',
+                                  style:
+                                      const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight:
+                                        FontWeight.w600,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  width: 6,
+                                ),
+
+                                Icon(
+                                  showDetails
+                                      ? Icons
+                                          .keyboard_arrow_up
+                                      : Icons
+                                          .keyboard_arrow_down,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(
+                          height: 16,
+                        ),
+
                         // ==================================================
                         // 발표 흐름 타임라인
                         // ==================================================
-
+                        if (showDetails) ...[
                         _SectionCard(
                           title:
                               '발표 흐름',
@@ -767,7 +1021,6 @@ class _ResultPageState extends State<ResultPage> {
                         // ==================================================
                         // 개선할 점
                         // ==================================================
-
                         _SectionCard(
                           title:
                               '개선할 점',
@@ -992,23 +1245,64 @@ class _ResultPageState extends State<ResultPage> {
                         // ==================================================
 
                         _SectionCard(
-                          title:
-                              '발표 내용',
-                          child:
-                              Text(
+                          title: '발표 내용',
+
+                          trailing: TextButton.icon(
+                            onPressed: () async {
+                              final transcript =
+                                  result['transcript']
+                                          ?.toString() ??
+                                      '';
+
+                              if (transcript.isEmpty) {
+                                return;
+                              }
+
+                              await Clipboard.setData(
+                                ClipboardData(
+                                  text: transcript,
+                                ),
+                              );
+
+                              if (!context.mounted) {
+                                return;
+                              }
+
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    '발표 내용이 복사되었습니다.',
+                                  ),
+                                  duration: Duration(
+                                    seconds: 2,
+                                  ),
+                                ),
+                              );
+                            },
+
+                            icon: const Icon(
+                              Icons.copy_rounded,
+                              size: 17,
+                            ),
+
+                            label: const Text(
+                              '복사',
+                            ),
+                          ),
+
+                          child: Text(
                             result['transcript']
                                     ?.toString() ??
                                 '',
-                            style:
-                                const TextStyle(
-                              fontSize:
-                                  14,
-                              height:
-                                  1.55,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              height: 1.55,
                             ),
                           ),
                         ),
-                      ],
+                      ],],
                     ),
                   ),
                 ),
@@ -1689,11 +1983,12 @@ class _DetailItem extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String title;
   final Widget child;
-
+  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.child,
+    this.trailing,
   });
 
 
@@ -1743,20 +2038,25 @@ class _SectionCard extends StatelessWidget {
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style:
-                const TextStyle(
-              fontSize:
-                  17,
-              fontWeight:
-                  FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              if (trailing != null)
+                trailing!,
+            ],
           ),
 
           const SizedBox(
-            height:
-                12,
+            height: 12,
           ),
 
           child,
@@ -1766,6 +2066,56 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _OverallStatusBadge
+    extends StatelessWidget {
+  final String level;
+
+  const _OverallStatusBadge({
+    required this.level,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final backgroundColor =
+        _overallStatusColor(
+      level,
+    );
+
+    final textColor =
+        _overallStatusTextColor(
+      level,
+    );
+
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 7,
+      ),
+      decoration:
+          BoxDecoration(
+        color: backgroundColor,
+        borderRadius:
+            BorderRadius.circular(
+          999,
+        ),
+      ),
+      child: Text(
+        _overallStatusText(
+          level,
+        ),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight:
+              FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+}
 
 // ============================================================
 // TEXT MAPPING
@@ -1914,6 +2264,74 @@ String _replaceBackendTerms(
         'Pause',
         '멈춤',
       );
+}
+
+String _overallStatusText(
+  String level,
+) {
+  switch (level) {
+    case 'low':
+      return '좋음';
+
+    case 'medium':
+      return '주의';
+
+    case 'high':
+      return '안 좋음';
+
+    default:
+      return '분석 없음';
+  }
+}
+
+
+Color _overallStatusColor(
+  String level,
+) {
+  switch (level) {
+    case 'low':
+      return const Color(
+        0xFFDDF7E8,
+      );
+
+    case 'medium':
+      return const Color(
+        0xFFFFF0C2,
+      );
+
+    case 'high':
+      return const Color(
+        0xFFFFDADA,
+      );
+
+    default:
+      return Colors.grey.shade200;
+  }
+}
+
+
+Color _overallStatusTextColor(
+  String level,
+) {
+  switch (level) {
+    case 'low':
+      return const Color(
+        0xFF187A45,
+      );
+
+    case 'medium':
+      return const Color(
+        0xFF8A6500,
+      );
+
+    case 'high':
+      return const Color(
+        0xFFA32929,
+      );
+
+    default:
+      return Colors.black54;
+  }
 }
 
 
