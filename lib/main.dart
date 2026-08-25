@@ -393,7 +393,7 @@ String formatRecordingTime(
     final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: [
-        'wav',
+        'wav', 'm4a'
       ],
     );
 
@@ -641,7 +641,7 @@ String formatRecordingTime(
                               Icons.upload_file,
                             ),
                             label: const Text(
-                              'WAV 파일 업로드',
+                              'WAV / M4A 파일 업로드',
                               style: TextStyle(
                                 fontSize: 16,
                               ),
@@ -1271,7 +1271,7 @@ class _HistoryStatusBadge
         break;
 
       case 'high':
-        text = '안 좋음';
+        text = '위험';
         background =
             const Color(
           0xFFFFDADA,
@@ -1283,7 +1283,7 @@ class _HistoryStatusBadge
         break;
 
       default:
-        text = '좋음';
+        text = '안정';
         background =
             const Color(
           0xFFDDF7E8,
@@ -2948,10 +2948,10 @@ String _riskLabel(
 ) {
   switch (level) {
     case 'high':
-      return '주의';
+      return '위험';
 
     case 'medium':
-      return '보통';
+      return '주의';
 
     case 'low':
       return '안정';
@@ -3031,13 +3031,13 @@ String _overallStatusText(
 ) {
   switch (level) {
     case 'low':
-      return '좋음';
+      return '안정';
 
     case 'medium':
       return '주의';
 
     case 'high':
-      return '안 좋음';
+      return '위험';
 
     default:
       return '분석 없음';
