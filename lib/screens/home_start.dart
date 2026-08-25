@@ -32,7 +32,7 @@ class HomeStart extends StatelessWidget {
             children: [
               const Expanded(
                 child: Text(
-                  'AI Presentation Coach',
+                  'Speechinx',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -63,16 +63,6 @@ class HomeStart extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'AI SPEAKER COACH',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                  color: AppColors.violet600,
-                ),
-              ),
-              const SizedBox(height: 4),
               const Text(
                 '발표를 녹음하고\nAI 피드백을 받아보세요',
                 style: TextStyle(

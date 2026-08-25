@@ -45,7 +45,7 @@ class PresentationCoachApp extends StatelessWidget {
   ) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'AI Presentation Coach',
+      title: 'Speechinx',
 
       scrollBehavior:
           const MaterialScrollBehavior().copyWith(
@@ -216,6 +216,24 @@ class _AppShellState extends State<AppShell> {
         errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  /// 녹음 화면에서 "홈으로 이동"을 눌렀을 때: 분석 없이 녹음만 취소하고 홈으로 돌아간다.
+  Future<void> _cancelRecording() async {
+    _recordingTimer?.cancel();
+
+    if (isRecording) {
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      isRecording = false;
+      homeScreen = HomeScreen.start;
+    });
   }
 
   // ============================================================
@@ -478,6 +496,7 @@ class _AppShellState extends State<AppShell> {
           mode: mode,
           seconds: recordingSeconds,
           onStop: _stopRecording,
+          onGoHome: _cancelRecording,
         );
       case HomeScreen.loading:
         return HomeLoading(mode: mode);

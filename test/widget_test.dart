@@ -10,7 +10,7 @@ void main() {
       );
 
       expect(
-        find.text('AI Presentation Coach'),
+        find.text('Speechinx'),
         findsOneWidget,
       );
 

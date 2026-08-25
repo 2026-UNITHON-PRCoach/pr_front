@@ -9,11 +9,13 @@ class HomeRecording extends StatelessWidget {
     required this.mode,
     required this.seconds,
     required this.onStop,
+    required this.onGoHome,
   });
 
   final RecordMode mode;
   final int seconds;
   final VoidCallback onStop;
+  final VoidCallback onGoHome;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +31,7 @@ class HomeRecording extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'AI Presentation Coach',
+                'Speechinx',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -78,7 +80,7 @@ class HomeRecording extends StatelessWidget {
                     Text(
                       '$mm:$ss',
                       style: const TextStyle(
-                        fontSize: 46,
+                        fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: AppColors.gray900,
                         fontFeatures: [FontFeature.tabularFigures()],
@@ -98,23 +100,6 @@ class HomeRecording extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: AppColors.gray200, height: 1)),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('녹음 시작',
-                          style: TextStyle(fontSize: 12, color: AppColors.gray400)),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.gray200, height: 1)),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('녹음 정지',
-                          style: TextStyle(fontSize: 12, color: AppColors.gray400)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
                 GestureDetector(
                   onTap: onStop,
                   child: Container(
@@ -195,8 +180,11 @@ class HomeRecording extends StatelessWidget {
                   child: const Icon(Icons.mic, size: 52, color: AppColors.violet600),
                 ),
                 const SizedBox(height: 12),
-                const Text('홈으로 이동',
-                    style: TextStyle(fontSize: 12, color: AppColors.gray400)),
+                GestureDetector(
+                  onTap: onGoHome,
+                  child: const Text('홈으로 이동',
+                      style: TextStyle(fontSize: 12, color: AppColors.gray400)),
+                ),
               ],
             ),
           ),
@@ -275,8 +263,6 @@ class HomeRecording extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        const _Waveform(),
       ],
     );
   }
@@ -328,57 +314,3 @@ class _BlinkingDotState extends State<_BlinkingDot>
   }
 }
 
-/// wave-bar 애니메이션 대체
-class _Waveform extends StatefulWidget {
-  const _Waveform();
-
-  @override
-  State<_Waveform> createState() => _WaveformState();
-}
-
-class _WaveformState extends State<_Waveform>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1000),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            for (var i = 0; i < 20; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Container(
-                  width: 4,
-                  height: _barHeight(i),
-                  decoration: BoxDecoration(
-                    color: AppColors.violet600,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  double _barHeight(int index) {
-    final t = (_controller.value + index * 0.05) % 1.0;
-    final wave = 1 - (2 * t - 1).abs();
-    return 4 + wave * 26;
-  }
-}
