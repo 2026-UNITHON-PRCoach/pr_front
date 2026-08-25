@@ -15,12 +15,12 @@ void main() {
       );
 
       expect(
-        find.text('발표 녹음 시작'),
+        find.text('음성만'),
         findsOneWidget,
       );
 
       expect(
-        find.text('WAV 파일 업로드'),
+        find.text('파일 업로드'),
         findsOneWidget,
       );
     },
